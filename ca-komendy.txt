@@ -1,0 +1,36 @@
+# Step 1: Initialize the CA directory structure
+mkdir -p demoCA/{certs,crl,newcerts,private}
+touch demoCA/index.txt
+echo 1000 > demoCA/serial
+echo 1000 > demoCA/crlnumber
+
+# Step 2: Generate CA private key
+openssl genrsa -out demoCA/private/cakey.pem 4096
+
+# Step 3: Generate CA CSR
+openssl req -new -key demoCA/private/cakey.pem -out demoCA/ca.csr -config openssl.cnf -subj "/C=US/ST=State/L=City/O=Organization/OU=Unit/CN=RootCA"
+
+# Step 4: Sign the CA CSR to create the CA certificate
+openssl x509 -req -in demoCA/ca.csr -signkey demoCA/private/cakey.pem -out demoCA/cacert.pem -days 3650 -sha256 -extensions v3_ca -extfile openssl.cnf
+
+# Step 5: Generate User private key
+openssl genrsa -out user.key 2048
+
+# Step 6: Generate User CSR
+openssl req -new -key user.key -out user.csr -config openssl.cnf -subj "/C=US/ST=State/L=City/O=Organization/OU=Unit/CN=UserCert"
+
+# Step 7: Sign the User CSR with the CA certificate to create the User certificate
+openssl ca -in user.csr -out user.crt -days 365 -config openssl.cnf -batch
+
+# Step 8: Revoke the User Certificate
+# Find the serial number of the certificate in demoCA/index.txt (generated after signing the user CSR)
+openssl ca -revoke demoCA/newcerts/$(cat demoCA/index.txt | grep -m 1 "^V" | awk '{print $3}').pem -config openssl.cnf
+
+# Step 9: Generate the Certificate Revocation List (CRL)
+openssl ca -gencrl -out demoCA/crl.pem -config openssl.cnf
+
+# Step 10: Verify the CRL
+openssl crl -in demoCA/crl.pem -text -noout
+
+openssl x509 -in user.crt -text -noout
+openssl x509 -in demoCA/cacert.pem -text -noout
